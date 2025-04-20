@@ -1,0 +1,119 @@
+name: Armbian Compile Server and Release
+on:
+  workflow_dispatch:
+    inputs:
+      BOARD:
+        description: 'Board to build for'
+        required: true
+        default: 'aml-s9xx-box'
+        type: string
+      RELEASE:
+        description: 'Release name'
+        required: true
+        default: 'jammy'
+        type: choice
+        options:
+          - 'bookworm'
+          - 'bullseye'
+          - 'buster'
+          - 'forcal'
+          - 'jammy'
+          - 'noble'
+          - 'oracular'
+          - 'plucky'
+          - 'sid'
+          - 'trixie'
+      BUILD_MINIMAL:
+        description: 'Build minimal image'
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      BUILD_DESKTOP:
+        description: 'Build desktop image'
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      INSTALL_HEADERS:
+        description: 'Install headers'
+        required: true
+        default: 'yes'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+      REPO_BRANCH:
+        description: 'Armbian build repository branch'
+        required: true
+        default: 'main'
+        type: string
+env:
+  RELEASE_BRANCH: "current"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: "Build Armbian"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Armbian build repository
+        run: |
+          git clone https://github.com/armbian/build.git -b ${{ github.event.inputs.REPO_BRANCH }} armbian-build
+          cd armbian-build
+      - name: Set desktop environment variables
+        id: desktop-vars
+        run: |
+          if [ "${{ github.event.inputs.BUILD_DESKTOP }}" == "yes" ]; then
+            echo "desktop_env=DESKTOP_ENVIRONMENT=xfce DESKTOP_ENVIRONMENT_CONFIG_NAME=config_base DESKTOP_APPGROUPS_SELECTED=\"browsers, desktop_tools, editor, internet, multimedia, programming\"" >> $GITHUB_OUTPUT
+          else
+            echo "desktop_env=" >> $GITHUB_OUTPUT
+          fi
+      - name: Compile
+        working-directory: ./armbian-build
+        run: |
+          ./compile.sh \
+            BOARD=${{ github.event.inputs.BOARD }} \
+            BRANCH=${{ env.RELEASE_BRANCH }} \
+            RELEASE=${{ github.event.inputs.RELEASE }} \
+            BUILD_MINIMAL=${{ github.event.inputs.BUILD_MINIMAL }} \
+            BUILD_DESKTOP=${{ github.event.inputs.BUILD_DESKTOP }} \
+            KERNEL_CONFIGURE=no \
+            EXTRAWIFI=yes \
+            INSTALL_HEADERS=${{ github.event.inputs.INSTALL_HEADERS }} \
+            COMPRESS_OUTPUTIMAGE=xz \
+            ${{ steps.desktop-vars.outputs.desktop_env }}
+      - name: Get image filename
+        id: get-filename
+        working-directory: ./armbian-build
+        run: echo "filename=$(basename $(ls output/images/*.img.xz) .img.xz)" >> $GITHUB_OUTPUT
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.ref_name }}-${{ steps.get-filename.outputs.filename }}
+          path: ./armbian-build/output/images/${{ steps.get-filename.outputs.filename }}.img.xz
+          retention-days: 5
+      - name: Create Release
+        uses: ncipollo/release-action@main
+        with:
+          artifacts: "./armbian-build/output/images/${{ steps.get-filename.outputs.filename }}.img.xz"
+          name: "Armbian ${{ github.event.inputs.BOARD }} ${{ github.event.inputs.RELEASE }}"
+          tag: "v${{ steps.get-filename.outputs.filename }}"
+          body: |
+            Armbian build for ${{ github.event.inputs.BOARD }}
+            
+            **Build Configuration:**
+            - Board: ${{ github.event.inputs.BOARD }}
+            - Release: ${{ github.event.inputs.RELEASE }}
+            - Minimal Build: ${{ github.event.inputs.BUILD_MINIMAL }}
+            - Desktop Build: ${{ github.event.inputs.BUILD_DESKTOP }}
+            - Headers Installed: ${{ github.event.inputs.INSTALL_HEADERS }}
+            - Repository Branch: ${{ github.event.inputs.REPO_BRANCH }}
+            ${{ github.event.inputs.BUILD_DESKTOP == 'yes' && '- Desktop Environment: XFCE (config_base) with browsers, desktop_tools, editor, internet, multimedia, programming' || '' }}
+          draft: false
+          makeLatest: true
