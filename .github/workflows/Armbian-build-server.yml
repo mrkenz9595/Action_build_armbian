@@ -18,7 +18,7 @@ on:
           - 'buster'
           - 'forcal'
           - 'jammy'
-          - 'nole'
+          - 'noble'
           - 'oracular'
           - 'plucky'
           - 'sid'
@@ -61,7 +61,6 @@ jobs:
   build:
     name: "Build Armbian"
     runs-on: ubuntu-latest
-    # Add permissions for creating releases and tags
     permissions:
       contents: write
       packages: write
@@ -103,22 +102,3 @@ jobs:
           name: ${{ github.ref_name }}-${{ steps.get-filename.outputs.filename }}
           path: ./armbian-build/output/images/${{ steps.get-filename.outputs.filename }}.img.xz
           retention-days: 5
-      - name: Create Release
-        uses: ncipollo/release-action@main
-        with:
-          artifacts: "./armbian-build/output/images/${{ steps.get-filename.outputs.filename }}.img.xz"
-          name: "Armbian ${{ github.event.inputs.BOARD }} ${{ github.event.inputs.RELEASE }}"
-          tag: "v${{ steps.get-filename.outputs.filename }}"
-          body: |
-            Armbian build for ${{ github.event.inputs.BOARD }}
-            
-            **Build Configuration:**
-            - Board: ${{ github.event.inputs.BOARD }}
-            - Release: ${{ github.event.inputs.RELEASE }}
-            - Minimal Build: ${{ github.event.inputs.BUILD_MINIMAL }}
-            - Desktop Build: ${{ github.event.inputs.BUILD_DESKTOP }}
-            - Headers Installed: ${{ github.event.inputs.INSTALL_HEADERS }}
-            - Repository Branch: ${{ github.event.inputs.REPO_BRANCH }}
-            ${{ github.event.inputs.BUILD_DESKTOP == 'yes' && '- Desktop Environment: XFCE (config_base) with browsers, desktop_tools, editor, internet, multimedia, programming' || '' }}
-          draft: false
-          makeLatest: true
