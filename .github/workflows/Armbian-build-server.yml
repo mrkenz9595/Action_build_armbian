@@ -1,4 +1,4 @@
-name: Armbian Compile Server and Release
+name: Armbian Build
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +10,7 @@ on:
       RELEASE:
         description: 'Release name'
         required: true
-        default: 'jammy'
+        default: 'plucky'
         type: choice
         options:
           - 'bookworm'
@@ -18,7 +18,7 @@ on:
           - 'buster'
           - 'forcal'
           - 'jammy'
-          - 'noble'
+          - 'nole'
           - 'oracular'
           - 'plucky'
           - 'sid'
@@ -61,6 +61,11 @@ jobs:
   build:
     name: "Build Armbian"
     runs-on: ubuntu-latest
+    # Add permissions for creating releases and tags
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
     steps:
       - name: Clone Armbian build repository
         run: |
